@@ -1,10 +1,7 @@
 use std::collections::{HashSet, VecDeque};
-use std::io;
-use std::io::Write;
 use charting_tools::charted_coordinate::ChartedCoordinate;
 use charting_tools::charted_paths::ChartedPaths;
 use charting_tools::ChartingTools;
-use op_map::op_utils::print_rock;
 use robotics_lib::interface;
 use robotics_lib::interface::{Direction, go, teleport};
 use robotics_lib::runner::Runnable;
@@ -12,13 +9,14 @@ use robotics_lib::utils::{LibError};
 use robotics_lib::world::tile::Tile;
 use robotics_lib::world::World;
 use rustici_planner::tool::{Destination, Planner, PlannerError, PlannerResult};
-use crate::{MAP, MyRobot, RobotMode};
+use crate::{MyRobot, RobotMode};
 
 const MAP_EXT: usize = 100;
 
 pub(crate) fn explore(robot: &mut MyRobot, world: &mut World) {
     let mut not_explore: HashSet<(usize, usize)> = HashSet::new();
     while robot.mode != RobotMode::Operation {
+        println!("Explored: {}", world.get_discoverable());
         // Get radius to explore
         let new_destination = Destination::explore(robot.get_energy().get_energy_level(), MAP_EXT);
         // Explore radius
@@ -77,7 +75,7 @@ pub(crate) fn next_discover(robot: &mut MyRobot, world: &mut World, not_explore:
                     match col {
                         None => {}
                         Some(_) => {
-                            match can_explore(&map, (i, j)) {
+                            match can_explore(&map, (i, j), robot.map_size) {
                                 Ok(_) => {
                                     let coord = (i, j);
                                     let destination = ChartedCoordinate(coord.0, coord.1);
@@ -147,17 +145,17 @@ fn got_to_destination(robot: &mut MyRobot, world: &mut World, mut actions: VecDe
     }
 }
 
-fn can_explore(map: &Vec<Vec<Option<Tile>>>, coord: (usize, usize)) -> Result<(), ()> {
+fn can_explore(map: &Vec<Vec<Option<Tile>>>, coord: (usize, usize), map_size: usize) -> Result<(), ()> {
     let (i, j) = (coord.0, coord.1);
 
     if map[i][j].clone().unwrap().tile_type.properties().walk() {
         if i > 0 && map[i - 1][j].is_none() {
             return Ok(());
         }
-        if j + 1 < MAP && map[i][j + 1].is_none() {
+        if j + 1 < map_size && map[i][j + 1].is_none() {
             return Ok(());
         }
-        if i + 1 < MAP && map[i + 1][j].is_none() {
+        if i + 1 < map_size && map[i + 1][j].is_none() {
             return Ok(());
         }
         if j > 0 && map[i][j - 1].is_none() {

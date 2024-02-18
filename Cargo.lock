@@ -3,10 +3,10 @@
 version = 3
 
 [[package]]
-name = "CivilEngineer"
-version = "0.1.0"
+name = "Fe2O3"
+version = "0.1.1"
 source = "sparse+https://advancedprogramming.disi.unitn.it/api/v1/crates/"
-checksum = "8132fc446ce6a6c3fe96195e2642a39204f26505f7e32853ad4db43891c8d442"
+checksum = "69cf22f6b7fbd5c6f8d002a03a7faf5efc90274f6e89638e9f630754937c4b49"
 dependencies = [
  "robotics_lib",
 ]
@@ -414,9 +414,9 @@ dependencies = [
 
 [[package]]
 name = "rip_worldgenerator"
-version = "0.5.43"
+version = "0.5.44"
 source = "sparse+https://advancedprogramming.disi.unitn.it/api/v1/crates/"
-checksum = "5b2e6f2a4ab6398c8df6b1690a9eb4ace1bcfd6a11045f5a66723a08014751df"
+checksum = "e16d8fc83df6885548838643864e515dc6c86f7300e84396297dc0e0a37c9d8a"
 dependencies = [
  "disjoint-sets",
  "dsu-tree",
@@ -430,14 +430,16 @@ dependencies = [
 name = "robot_test"
 version = "0.1.0"
 dependencies = [
- "CivilEngineer",
+ "Fe2O3",
  "charting_tools",
  "op_map",
  "pmp_collect_all",
+ "priority-queue",
  "rip_worldgenerator",
  "robotics_lib",
  "rust_and_furious_dynamo",
  "rustici_planner",
+ "shared_state",
  "strum",
  "visualizer",
 ]
@@ -466,9 +468,9 @@ dependencies = [
 
 [[package]]
 name = "rustici_planner"
-version = "0.1.1"
+version = "0.1.2"
 source = "sparse+https://advancedprogramming.disi.unitn.it/api/v1/crates/"
-checksum = "fe9334a634e5343220c9a206887761a226f47109f3db73e778ffa44b0c7e8537"
+checksum = "512e8d3fac49b24504974609fdb051220ba49855a5482136b54615a609ed392c"
 dependencies = [
  "priority-queue",
  "robotics_lib",
@@ -508,6 +510,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared_state"
+version = "0.1.0"
+dependencies = [
+ "robotics_lib",
+]
+
+[[package]]
 name = "signal-hook"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -539,9 +548,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.12.0"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2593d31f82ead8df961d8bd23a64c2ccf2eb5dd34b0a34bfb4dd54011c72009e"
+checksum = "3b187f0231d56fe41bfb12034819dd2bf336422a5866de41bc3fec4b2e3883e8"
 
 [[package]]
 name = "string_morph"

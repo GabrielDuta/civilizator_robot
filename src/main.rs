@@ -1,73 +1,158 @@
 use robotics_lib::energy::Energy;
 use robotics_lib::event::events::Event;
 use robotics_lib::interface;
-use robotics_lib::interface::{debug, Direction, go};
 use robotics_lib::runner::{Robot, Runnable, Runner};
 use robotics_lib::runner::backpack::BackPack;
-use robotics_lib::utils::{go_allowed, LibError};
 use robotics_lib::world::coordinates::Coordinate;
-use robotics_lib::world::{World, world_generator};
+use robotics_lib::world::{World};
 use robotics_lib::world::world_generator::Generator;
 use rip_worldgenerator;
 use strum::IntoEnumIterator;
 use charting_tools;
-use charting_tools::charted_coordinate::ChartedCoordinate;
-use charting_tools::charted_paths::ChartedPaths;
-use charting_tools::charted_world::ChartedWorld;
-use charting_tools::charting_bot::ChartingBot;
+use charting_tools::charted_map::ChartedMap;
 use charting_tools::ChartingTools;
-use robotics_lib::world::tile::Tile;
-use rustici_planner::tool::{Destination, Planner, PlannerError, PlannerResult};
+use robotics_lib::interface::robot_map;
+use robotics_lib::world::tile::{Content, Tile};
+use shared_state::SharedState;
+use crate::collect_rocks::collect;
+use crate::poi::Connection;
+use crate::RobotMode::Build;
 
-use crate::visualizer::{temp_debug, visualize_debug};
-
-mod visualizer;
+mod visualizer2;
 mod explore_world;
+mod poi;
+mod collect_rocks;
+mod build_roads;
 
-const MAP: usize = 150;
+
 struct MyRobot {
     robot: Robot,
+    map_size: usize,
     mode: RobotMode,
-    charted_world: ChartedWorld,
-    // charting_bot: Option<ChartingBot>,
-    visualizer:
+    charted_coords: ChartedMap<Content>,
+    visualizer: visualizer::Visualizer,
+    rocks: Vec<(usize, usize)>,
+    interest: Vec<(usize, usize)>,
+    mst: Vec<Connection>,
+    first_tick: bool,
+    shared_state: shared_state::SharedState
 }
 
 fn main() {
 
     // let mut world = rip_worldgenerator::MyWorldGen::new();
-    let mut world = rip_worldgenerator::MyWorldGen::new_param(MAP, 1, 1, 1, true, false, 2);
+    let map_size = 100;
+    let mut world = rip_worldgenerator::MyWorldGen::new_param(map_size, 1, 0, 1, true, false, 10);
 
-    let mut r = MyRobot::new(200);
+    let mut r = MyRobot::new(map_size, shared_state::SharedState::new());
     let mut run = Runner::new( Box::new(r), &mut world).unwrap();
+
 
     'running : loop {
     // for i in 0..10 {
         run.game_tick();
         //time control here
+
     }
 
 }
 
 impl Runnable for MyRobot {
     fn process_tick(&mut self, world: &mut World) {
+        if self.first_tick {
+            let debug_info = interface::debug(self, world);
+            self.shared_state.update_world(
+                debug_info.0, debug_info.1, debug_info.2
+            );
+            self.first_tick = false;
+        }
 
         match self.mode {
-            RobotMode::InitMap => {
-                let (x, _, _) = interface::debug(self, world);
-                println!("\n{:?}", self.get_coordinate());
-                visualizer::temp_debug(x);
-
-                self.charted_world.init(world);
-                self.mode = RobotMode::Discover;
-            }
             RobotMode::Discover => {
                 self.explore_world(world);
                 println!("\n{:?}", self.get_coordinate());
-                visualize_debug(interface::robot_map(world));
+                visualizer2::visualize_debug(interface::robot_map(world));
             }
             RobotMode::Operation => {
-                panic!("Finito");
+                self.find_all_content_type(world);
+                self.mst = poi::por(self.interest.clone(), world);
+
+                let map = robot_map(world);
+                match map {
+                    None => {}
+                    Some(w) => {
+                        if w[4][4].is_some() &&
+                            w[self.map_size - 4][self.map_size - 4].is_some() {
+                            self.mst.push(Connection {
+                                cost: 100,
+                                start: (4, 4),
+                                end: (self.map_size - 4, self.map_size - 4)
+                            });
+                        }
+                        if w[4][self.map_size - 4].is_some() &&
+                            w[self.map_size - 4][4].is_some() {
+                            self.mst.push(Connection {
+                                cost: 100,
+                                start: (4, self.map_size - 4),
+                                end: (self.map_size - 4, 4)
+                            });
+                        }
+                        if w[4][4].is_some() &&
+                            w[self.map_size - 4][4].is_some() {
+                            self.mst.push(Connection {
+                                cost: 100,
+                                start: (4, self.map_size - 4),
+                                end: (self.map_size - 4, 4)
+                            });
+                        }
+                        if w[4][self.map_size - 4].is_some() &&
+                            w[self.map_size - 4][self.map_size - 4].is_some() {
+                            self.mst.push(Connection {
+                                cost: 100,
+                                start: (4, self.map_size - 4),
+                                end: (self.map_size - 4, self.map_size - 4)
+                            });
+                        }
+                        if w[4][4].is_some() &&
+                            w[4][self.map_size - 4].is_some() {
+                            self.mst.push(Connection {
+                                cost: 100,
+                                start: (4, self.map_size - 4),
+                                end: (4, self.map_size - 4)
+                            });
+                        }
+                        if w[self.map_size - 4][4].is_some() &&
+                            w[self.map_size - 4][self.map_size - 4].is_some() {
+                            self.mst.push(Connection {
+                                cost: 100,
+                                start: (self.map_size - 4, 4),
+                                end: (self.map_size - 4, self.map_size - 4)
+                            });
+                        }
+
+
+                        // Print the minimum spanning tree
+                        println!("Minimum Spanning Tree:");
+                        for connection in self.mst.iter() {
+                            println!(
+                                "{:?} --({})-- {:?}",
+                                connection.start, connection.cost, connection.end
+                            );
+                        }
+                    }
+                }
+
+                collect(self, world);
+                self.mode = Build;
+            }
+            RobotMode::Build => {
+                if !self.mst.is_empty() && !self.rocks.is_empty() {
+                    build_roads::build_road(self, world);
+                } else {
+                    println!("\n{:?}", self.get_coordinate());
+                    visualizer2::visualize_debug(interface::robot_map(world));
+                    panic!("Finished!");
+                }
             }
             RobotMode::Recharge => {
                 if self.robot.energy.has_enough_energy(1000) {
@@ -78,6 +163,34 @@ impl Runnable for MyRobot {
     }
 
     fn handle_event(&mut self, event: Event) {
+        match event {
+            Event::Ready => {}
+            Event::Terminated => {}
+            Event::TimeChanged(_) => {
+                self.shared_state.update_event(event);
+            }
+            Event::DayChanged(_) => {
+                self.shared_state.update_event(event);
+            }
+            Event::EnergyRecharged(_) => {
+                self.shared_state.update_event(event);
+            }
+            Event::EnergyConsumed(_) => {
+                self.shared_state.update_event(event);
+            }
+            Event::Moved(_, _) => {
+                self.shared_state.update_event(event);
+            }
+            Event::TileContentUpdated(_, _) => {
+                self.shared_state.update_event(event);
+            }
+            Event::AddedToBackpack(_, _) => {
+                self.shared_state.update_event(event);
+            }
+            Event::RemovedFromBackpack(_, _) => {
+                self.shared_state.update_event(event);
+            }
+        }
     }
 
     fn get_energy(&self) -> &Energy {
@@ -107,17 +220,9 @@ impl Runnable for MyRobot {
 
 impl MyRobot {
 
-    fn new(i: usize) -> MyRobot {
+    fn new(map_size: usize, shared_state: SharedState) -> MyRobot {
 
-        /* Charting bot -> now useless
-        let res_charting = ChartingTools::tool::<ChartingBot>();
-        let mut charting_bot = match res_charting {
-            Ok(bot) => {Some(bot)}
-            Err(e) => {println!("{e}"); None}
-        };
-         */
-
-        let res_charting = ChartingTools::tool::<ChartedWorld>();
+        let res_charting = ChartingTools::tool::<ChartedMap<Content>>();
         let mut charted_world = match res_charting {
             Ok(bot) => {Some(bot)}
             Err(e) => {println!("{e}"); None}
@@ -126,9 +231,16 @@ impl MyRobot {
 
         MyRobot {
             robot: Robot::new(),
-            mode: RobotMode::InitMap,
-            charted_world,
+            mode: RobotMode::Discover,
+            map_size,
+            charted_coords: charted_world,
             // charting_bot,
+            visualizer: visualizer::Visualizer::new(),
+            rocks: Vec::new(),
+            interest: Vec::new(),
+            mst: vec![],
+            first_tick: true,
+            shared_state
         }
 
     }
@@ -138,17 +250,38 @@ impl MyRobot {
     }
 
     fn find_all_content_type(&mut self, world: &mut World) {
-
+        let map = interface::robot_map(world).unwrap();
+        for (i, row) in map.iter().enumerate() {
+            for (j, col) in row.iter().enumerate() {
+                if col.is_some() {
+                    match col.clone().unwrap().content {
+                        Content::Rock(_) => {self.rocks.push((i, j))}
+                        Content::Tree(_) => {}
+                        Content::Garbage(_) => {}
+                        Content::Fire => {}
+                        Content::Coin(_) => {}
+                        Content::Bin(_) => {self.interest.push((i, j))}
+                        Content::Crate(_) => {self.interest.push((i, j)); println!("Crate at: {} - {}", i, j)}
+                        Content::Bank(_) => {self.interest.push((i, j))}
+                        Content::Water(_) => {}
+                        Content::Market(_) => {self.interest.push((i, j))}
+                        Content::Fish(_) => {}
+                        Content::Building => {}
+                        Content::Bush(_) => {}
+                        Content::JollyBlock(_) => {}
+                        Content::Scarecrow => {}
+                        Content::None => {}
+                    }
+                }
+            }
+        }
     }
-
 }
-
-
 
 #[derive(PartialEq)]
 enum RobotMode {
-    InitMap,
     Discover,
     Operation,
-    Recharge
+    Recharge,
+    Build
 }
